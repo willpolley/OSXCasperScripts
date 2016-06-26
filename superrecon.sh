@@ -1,42 +1,25 @@
 #!/bin/bash
 #
-# superrecon.sh
+# superrecon2.sh
 #
-# scrape directory for user & location info - add it to recon
-# lachlan.stewart@interpublic.com
-# 0.1 - first release 
-# 0.2 - jaymes.brimmer@mccannsf.com - Updated code for user info parsing
-# 0.3 - thanks Jaymes, querying attrib direct via dscl is a much better approach! removed extraneous echos
-# 	 	directed stderr to null so we don't see errors for unpopualted atributes (tidier) 
-# 0.4 - removed superfluous local account position var.
-#       changed phone number text manipulation to return only number
-#       added department via querying Active Directory
-#       fixed echo formatting for AD accounts
+# scrape directory for user & location info
 
-loggedinuser=$(ls -l /dev/console | awk '{ print $3 }')
-accountnode=$(dscl . -read /Users/$loggedinuser OriginalNodeName 2> /dev/null | tail -1 | cut -c 2-)
+userloggedin="$(who | grep console | awk '{print $1}')"
+adcheck=$(dscl . read /Users/${userloggedin} AuthenticationAuthority | grep LocalCachedUser)
 
-echo "Reconning and submitting user information for $loggedinuser..."
-echo "------------------------------------------------------------------------"
-
-if [ "$accountnode" == "" ]
+if [ -z "${adcheck}" ]
 then
-	echo "Local Account"
+	echo "superRecon - ${userloggedin} is a Local Account"
 	echo "------------------------------------------------------------------------"
-	jamf recon -endUsername $loggedinuser -position "Local Account"
+	jamf recon -endUsername "${userloggedin}" -position "Local Account" -realname "" -email "" -position "" -phone "" # blank out empty fields in jss.
 else
-	userrealname=$(dscl . -read /Users/$loggedinuser original_realname 2> /dev/null | tail -1 | cut -d ' ' -f 2-)
-	useremail=$(dscl . -read /Users/$loggedinuser EMailAddress 2> /dev/null | cut -d ' ' -f 2-)
-	userposition=$(dscl . -read /Users/$loggedinuser JobTitle 2> /dev/null | tail -1 | cut -d ' ' -f 2-) # these keys may not be filed
-	userphone=$(dscl . -read /Users/$loggedinuser PhoneNumber 2> /dev/null | tail -1 | cut -c 2-)
-	userdepartment=$(dscl "$accountnode" -read /Users/$loggedinuser dsAttrTypeNative:department 2> /dev/null | tail -1 | cut -c 2-)
-	echo "realname:		$userrealname"
-	echo "emailaddress:		$useremail"
-	echo "position:		$userposition"
-	echo "phone:			$userphone"
-	echo "department:		$userdepartment"
+	echo "supeRecon - ${userloggedin} is an AD Account"	
 	echo "------------------------------------------------------------------------"
-	jamf recon -endUsername "$loggedinuser" -realname "$userrealname" -email "$useremail" -position "$userposition" -phone "$userphone"
+	userrealname=$(dscl . -read /Users/${userloggedin} original_realname 2> /dev/null | tail -1 | cut -d ' ' -f 2-)
+	useremail=$(dscl . -read /Users/${userloggedin} EMailAddress 2> /dev/null | cut -d ' ' -f 2-)
+	userposition=$(dscl . -read /Users/${userloggedin} JobTitle 2> /dev/null | tail -1 | cut -d ' ' -f 2-) # these keys may not be filed
+	userphone=$(dscl . -read /Users/${userloggedin} PhoneNumber 2> /dev/null | tail -1 | cut -c 2-)
+	jamf recon -endUsername "${userloggedin}" -realname "${userrealname}" -email "${useremail}" -position "${userposition}" -phone "${userphone}"
 fi
 
 exit 0
